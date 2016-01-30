@@ -24,6 +24,6 @@ Good luck!
 ## How to run the analysis
 
 - Run the script `run_analysis.R` and it will call the `run_analysis.Rmd`
-- The code will generate `run_analysis.html` containing R chunks used for generate the tidy dataset.
+- The code will generate `run_analysis.html` containing R chunks used to generate the tidy dataset.
 - This will generate the file name `dataset_tidy_smartphone.csv` (Comma-separated value)
 
