@@ -1,7 +1,5 @@
 # Codebook for Project assignment
 
-Variable list and descriptions
-
 Variable name	Description
 ------------------
 | Name | Description |
