@@ -19,5 +19,11 @@ Uses descriptive activity names to name the activities in the data set
 Appropriately labels the data set with descriptive variable names.
 From the data set in step 4, creates a second, independent tidy data set with the average of each variable for each activity and each subject.
 
-## How to run the analysis
 Good luck!
+
+## How to run the analysis
+
+- Run the script `run_analysis.R` and it will call the `run_analysis.Rmd`
+- The code will generate `run_analysis.html` containing all the instructions for the project assignment
+- This will generate the file name `dataset_tidy_smartphone.csv` (Comma-separated value)
+
