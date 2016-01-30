@@ -1,0 +1,221 @@
+---
+title: "Getting and Clenaing Data Project"
+author: "apietrelli"
+date: "30 Jan 2016"
+output: html_document
+---
+
+# Prepare library and working directory
+
+1. Set dir
+```{r set_dir}
+path = getwd()
+path
+```
+
+2. Load Packages
+```{r load_packages}
+packages <- c("data.table", "reshape2")
+sapply(packages, require, character.only = TRUE, quietly = TRUE)
+```
+
+# Load data
+
+Dataset has been downloaded, we will load the data from `UCI HAR Dataset` directly
+
+## Set the path for data
+
+```{r set_dataInput}
+pathInput <- file.path(path, "UCI HAR Dataset")
+list.files(pathInput, recursive = TRUE)
+```
+
+## Read the files
+
+1. Subject id
+
+```{r load_data_ID}
+dtSubjectTrain <- fread(file.path(pathInput, "train", "subject_train.txt"))
+dtSubjectTest <- fread(file.path(pathInput, "test", "subject_test.txt"))
+```
+
+2. Activity 
+```{r load_data_activity_labels}
+dtActivityTrain <- fread(file.path(pathInput, "train", "y_train.txt"))
+dtActivityTest <- fread(file.path(pathInput, "test", "y_test.txt"))
+```
+
+3. Features
+
+```{r load_data_activity_values}
+dtTrain <- fread(file.path(pathInput, "train", "X_train.txt"))
+dtTest <- fread(file.path(pathInput, "test", "X_test.txt"))
+```
+
+# Merge the train set and test set
+
+Concatenate datatables
+
+```{r}
+dtSubject <- rbind(dtSubjectTrain, dtSubjectTest)
+setnames(dtSubject, "V1", "subject")
+dtActivity <- rbind(dtActivityTrain, dtActivityTest)
+setnames(dtActivity, "V1", "activityNum")
+dt <- rbind(dtTrain, dtTest)
+```
+
+Merge datatable Subject, Activity and Features
+```{r merge_1}
+dt <- cbind(cbind(dtSubject, dtActivity), dt)
+setkey(dt, subject, activityNum)
+```
+
+#Extract mean and standard deviation for each measurement
+
+Read the features name and convert them into `dt`
+
+```{r}
+dtFeatures = fread(file.path(pathInput, "features.txt"))
+setnames(dtFeatures, names(dtFeatures), c("featureNum", "featureName"))
+```
+
+Extract only measurement for mean and standard deviation
+
+```{r}
+dtFeatures = dtFeatures[grepl("mean\\(\\)|std\\(\\)", featureName)]
+head(dtFeatures)
+```
+
+Prepare `dfFeatures` for select `dt` feature column adding a common ID (featureCode)
+
+```{r}
+dtFeatures$featureCode = paste("V",dtFeatures$featureNum, sep='')
+head(dtFeatures)
+```
+
+Select only featureCode columns
+
+```{r}
+select <- c(key(dt), dtFeatures$featureCode)
+dt <- dt[, select, with = FALSE]
+```
+
+# Uses descriptive activity names to name the activities in the data set
+
+Read activity labels and recode the name in `dt`
+
+```{r}
+dtActivityLabels = fread(file.path(pathInput, "activity_labels.txt"))
+setnames(dtActivityLabels, names(dtActivityLabels), c("activityNum", "activityName"))
+```
+
+# Labels the data set with descriptive variable names
+
+Merge the data tables
+
+```{r}
+dt = merge(dt, dtActivityLabels, by="activityNum")
+```
+
+Add `activityName` as key
+
+```{r}
+setkey(dt, subject, activityNum, activityName)
+key(dt)
+```
+
+Reshape `dt` in a tall and narrow format 
+
+```{r}
+dt <- data.table(melt(dt, key(dt), variable.name = "featureCode"))
+```
+
+Add activity readable names by merging `dt` and `dtFeatures`
+
+```{r}
+dt = merge(dt, dtFeatures[,list(featureNum, featureCode, featureName)],
+      by="featureCode",
+      all.x = T)
+```
+
+Create separate columns for all possible combination of `featureName`
+
+There are different type of features:
+
+1. Features with 2 categories
+
+```{r}
+category = 2
+y <- matrix(seq(1, category), nrow = category)
+```
+
+- Time and Frequency
+```{r}
+x <- matrix(c(grepl("^t", dt$featureName), grepl("^f", dt$featureName)), ncol = nrow(y))
+dt$featDomain <- factor(x %*% y, labels = c("Time", "Freq"))
+x <- matrix(c(grepl("Acc", dt$featureName), grepl("Gyro", dt$featureName)), ncol = nrow(y))
+
+```
+
+- Accelerator and Gyroscope
+
+```{r}
+dt$featInstrument <- factor(x %*% y, labels = c("Accelerometer", "Gyroscope"))
+x <- matrix(c(grepl("BodyAcc", dt$featureName),
+              grepl("GravityAcc", dt$featureName)),
+            ncol = nrow(y))
+```
+
+- Body and Gravity
+
+```{r}
+dt$featAcceleration <- factor(x %*% y, labels = c(NA, "Body", "Gravity"))
+x <- matrix(c(grepl("mean()", dt$featureName),
+              grepl("std()", dt$featureName)),
+            ncol = nrow(y))
+dt$featVariable <- factor(x %*% y, labels = c("Mean", "SD"))
+```
+
+2. Features with 1 category
+
+- Jerk
+
+```{r}
+dt$featJerk <- factor(grepl("Jerk", dt$featureName), labels = c(NA, "Jerk"))
+```
+
+- Magnitude
+
+```{r}
+dt$featMagnitude <- factor(grepl("Mag", dt$featureName), labels = c(NA, "Magnitude"))
+```
+
+3. Features with 3 categories 
+
+- Axis X,Y,Z
+
+```{r}
+category = 3
+y <- matrix(seq(1, category), nrow = category)
+x <- matrix(c(grepl("-X",dt$featureName),
+              grepl("-Y",dt$featureName),
+              grepl("-Z",dt$featureName)),
+            ncol = nrow(y))
+dt$featAxis <- factor(x %*% y, labels = c(NA, "X", "Y", "Z"))
+```
+
+# Create a new tidy dataset
+
+```{r}
+setkey(dt, subject, activityName, featDomain, featAcceleration, featInstrument, 
+    featJerk, featMagnitude, featVariable, featAxis)
+dtTidy <- dt[, list(count = .N, average = mean(value)), by = key(dt)]
+```
+
+Write the new dataset
+
+```{r}
+write.csv(dtTidy, "dataset_tidy_smartphone.csv", row.names = F)
+```
+
+DONE
